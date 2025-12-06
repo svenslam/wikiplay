@@ -14,6 +14,7 @@ interface FactModalProps {
   isLoading: boolean;
   isAssetsLoading: boolean;
   onAnswerQuiz: (isCorrect: boolean) => void;
+  initialView?: 'fact' | 'quiz';
 }
 
 // Helper to decode PCM
@@ -56,7 +57,8 @@ const FactModal: React.FC<FactModalProps> = ({
     onClose, 
     isLoading,
     isAssetsLoading,
-    onAnswerQuiz
+    onAnswerQuiz,
+    initialView = 'fact'
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -65,6 +67,7 @@ const FactModal: React.FC<FactModalProps> = ({
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const quizSectionRef = useRef<HTMLDivElement>(null);
 
   // Reset quiz state when modal opens
   useEffect(() => {
@@ -76,6 +79,16 @@ const FactModal: React.FC<FactModalProps> = ({
         stopAudio();
     }
   }, [isOpen]);
+
+  // Handle scroll to quiz if requested
+  useEffect(() => {
+    if (isOpen && !isLoading && quizData && initialView === 'quiz' && quizSectionRef.current) {
+        // Small delay to ensure layout is ready
+        setTimeout(() => {
+            quizSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+    }
+  }, [isOpen, isLoading, quizData, initialView]);
 
   // Cleanup
   useEffect(() => {
@@ -233,7 +246,7 @@ const FactModal: React.FC<FactModalProps> = ({
 
                 {/* Separator */}
                 {!isLoading && (
-                    <div className="flex items-center gap-4 opacity-50">
+                    <div className="flex items-center gap-4 opacity-50" ref={quizSectionRef}>
                         <div className="h-px bg-gray-300 flex-1"></div>
                         <ArrowDown size={16} className="text-gray-400" />
                         <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Quiz</span>

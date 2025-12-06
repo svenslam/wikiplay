@@ -19,6 +19,7 @@ const App: React.FC = () => {
   const [currentAudio, setCurrentAudio] = useState<string | null>(null);
   
   const [modalOpen, setModalOpen] = useState(false);
+  const [initialModalView, setInitialModalView] = useState<'fact' | 'quiz'>('fact');
   const [isAssetsLoading, setIsAssetsLoading] = useState(false);
   
   // Ambient Mode State
@@ -31,7 +32,7 @@ const App: React.FC = () => {
     return initial;
   });
 
-  const handleCategorySelect = async (category: Category) => {
+  const handleCategorySelect = async (category: Category, view: 'fact' | 'quiz' = 'fact') => {
     // Reset States
     setCurrentFact(null);
     setCurrentQuiz(null);
@@ -43,6 +44,7 @@ const App: React.FC = () => {
     setIsAmbientMode(false);
 
     setCurrentCategory(category);
+    setInitialModalView(view);
     setGameState(GameState.FETCHING);
     setModalOpen(true);
     
@@ -73,7 +75,7 @@ const App: React.FC = () => {
 
   const handleRandom = () => {
       const randomCat = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-      handleCategorySelect(randomCat);
+      handleCategorySelect(randomCat, 'fact');
   };
 
   const handleQuizAnswer = (isCorrect: boolean) => {
@@ -216,13 +218,13 @@ const App: React.FC = () => {
                     {/* Action Buttons Row */}
                     <div className="grid grid-cols-2 divide-x divide-black/20 bg-black/20 backdrop-blur-sm border-t border-white/10">
                         <button 
-                            onClick={() => handleCategorySelect(cat)}
+                            onClick={() => handleCategorySelect(cat, 'fact')}
                             className="flex items-center justify-center gap-2 py-3 hover:bg-white/20 transition-colors text-white/90 hover:text-white text-sm font-bold"
                         >
                             <BookOpen size={16} /> Weetje
                         </button>
                         <button 
-                            onClick={() => handleCategorySelect(cat)}
+                            onClick={() => handleCategorySelect(cat, 'quiz')}
                             className="flex items-center justify-center gap-2 py-3 hover:bg-white/20 transition-colors text-white/90 hover:text-white text-sm font-bold"
                         >
                             <BrainCircuit size={16} /> Quiz
@@ -279,6 +281,7 @@ const App: React.FC = () => {
         isLoading={gameState === GameState.FETCHING}
         isAssetsLoading={isAssetsLoading}
         onAnswerQuiz={handleQuizAnswer}
+        initialView={initialModalView}
       />
 
       <RadioPlayer />

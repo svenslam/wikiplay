@@ -2,9 +2,20 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { Category, TopicContent } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Safely retrieve API key or default to empty string to prevent ReferenceError
+const apiKey = (typeof process !== "undefined" && process.env && process.env.API_KEY) ? process.env.API_KEY : "";
+
+// Only initialize if we have a key (or handle safely later)
+// Note: In a static GitHub pages deploy without a proxy, this will likely fail to generate content
+// unless the key is injected during build. This prevents the immediate "crash" on load.
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export const fetchTopicContent = async (category: Category): Promise<TopicContent | null> => {
+  if (!ai) {
+    console.warn("API Key missing or invalid. Cannot fetch content.");
+    return null;
+  }
+
   try {
     const prompt = `
       Je bent de host van een kennis-app genaamd Wikiplay.
@@ -64,6 +75,8 @@ export const fetchTopicContent = async (category: Category): Promise<TopicConten
 };
 
 export const fetchTriviaImage = async (textContext: string): Promise<string | null> => {
+  if (!ai) return null;
+  
   try {
     // Shorten context if too long to save tokens/avoid confusion, keep essence
     const cleanContext = textContext.replace(/^-.*?Wist je dat/i, '').substring(0, 300);
@@ -95,6 +108,8 @@ export const fetchTriviaImage = async (textContext: string): Promise<string | nu
 };
 
 export const fetchTriviaAudio = async (text: string): Promise<string | null> => {
+    if (!ai) return null;
+
     try {
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
