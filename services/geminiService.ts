@@ -7,7 +7,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 export const fetchTopicContent = async (category: Category): Promise<TopicContent | null> => {
   try {
     const prompt = `
-      Je bent de host van een kennis-app genaamd WikiDart.
+      Je bent de host van een kennis-app genaamd Wikiplay.
       De gebruiker heeft de categorie "${category}" gekozen.
 
       Genereer een JSON object met twee onderdelen:

@@ -154,7 +154,7 @@ const App: React.FC = () => {
                     <div className="w-10 h-10 bg-amber-600 rounded-lg flex items-center justify-center border-2 border-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.5)]">
                         <span className="text-xl">🎯</span>
                     </div>
-                    <h1 className="text-2xl md:text-3xl font-[Lobster] text-amber-400 drop-shadow-sm tracking-wide">WikiDart</h1>
+                    <h1 className="text-2xl md:text-3xl font-[Lobster] text-amber-400 drop-shadow-sm tracking-wide">Wikiplay</h1>
                 </div>
                 
                 <div className="flex gap-2">

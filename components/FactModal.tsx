@@ -309,7 +309,7 @@ const FactModal: React.FC<FactModalProps> = ({
                     onClick={() => {
                         if (navigator.share) {
                             navigator.share({
-                                title: `WikiDart: ${category}`,
+                                title: `Wikiplay: ${category}`,
                                 text: `${fact}\n\nQuizvraag: ${quizData?.question}`,
                                 url: window.location.href
                             }).catch(console.error);

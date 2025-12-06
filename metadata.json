@@ -1,5 +1,5 @@
 {
-  "name": "WikiDart: Het Weetjesbord",
-  "description": "Een interactief, draaiend dartbord dat Wikipedia weetjes genereert op basis van waar je gooit. Inclusief sfeervolle radio.",
+  "name": "Wikiplay: Het Weetjesbord",
+  "description": "Een interactieve kennis-app die Wikipedia weetjes en quizzen genereert. Inclusief sfeervolle radio.",
   "requestFramePermissions": []
 }
