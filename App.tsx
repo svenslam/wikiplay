@@ -5,7 +5,7 @@ import { Category, GameState, ScoreBoard, QuizData } from './types';
 import { fetchTopicContent, fetchTriviaImage, fetchTriviaAudio } from './services/geminiService';
 import { Shuffle, Trophy, Maximize2, BookOpen, BrainCircuit, ArrowLeft } from 'lucide-react';
 
-const CATEGORIES = Object.values(Category);
+const CATEGORIES = Object.values(Category) as Category[];
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.IDLE);

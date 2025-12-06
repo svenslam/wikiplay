@@ -1,10 +1,161 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
-import { Category, GameState } from './types.js';
-import { fetchTopicContent, fetchTriviaImage, fetchTriviaAudio } from './services/geminiService.js';
+import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { Shuffle, Trophy, Maximize2, BookOpen, BrainCircuit, ArrowLeft, X, RefreshCw, Share2, Volume2, StopCircle, Image as ImageIcon, CheckCircle, XCircle, ArrowDown } from 'lucide-react';
 
-// --- FACT MODAL COMPONENT ---
+// --- 1. DEFINITIONS (Formerly types.js) ---
+
+const Category = {
+  HISTORY: 'Geschiedenis',
+  SCIENCE: 'Wetenschap',
+  NATURE: 'Natuur',
+  SPORTS: 'Sport',
+  ART: 'Kunst',
+  TECH: 'Technologie',
+  GEOGRAPHY: 'Geografie',
+  ENTERTAINMENT: 'Entertainment',
+};
+
+const GameState = {
+  IDLE: 'IDLE',
+  SPINNING: 'SPINNING',
+  THROWN: 'THROWN',
+  FETCHING: 'FETCHING',
+  SHOWING_CONTENT: 'SHOWING_CONTENT',
+};
+
+// --- 2. SERVICE LOGIC (Formerly geminiService.js) ---
+
+// Safely retrieve API key or default to empty string to prevent ReferenceError
+const apiKey = (typeof process !== "undefined" && process.env && process.env.API_KEY) ? process.env.API_KEY : "";
+
+// Only initialize if we have a key
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+
+const fetchTopicContent = async (category) => {
+  if (!ai) {
+    console.warn("API Key missing or invalid. Cannot fetch content.");
+    return null;
+  }
+
+  try {
+    const prompt = `
+      Je bent de host van een kennis-app genaamd Wikiplay.
+      De gebruiker heeft de categorie "${category}" gekozen.
+
+      Genereer een JSON object met twee onderdelen:
+      1. 'fact': Een interessant, minder bekend Wikipedia-weetje over dit onderwerp.
+         - Begin de tekst ALTIJD met: "- ${category} - \n\nWist je dat..."
+         - Houd het beknopt (max 3-4 zinnen).
+         - Schrijf in het Nederlands.
+      
+      2. 'quiz': Een uitdagende multiple-choice vraag die gaat over de bredere context of achtergrond van dit specifieke onderwerp.
+         - BELANGRIJK: Het antwoord mag NIET letterlijk in de tekst van 'fact' staan. De gebruiker moet nadenken of algemene kennis gebruiken.
+         - Het moet wel direct gerelateerd zijn aan het onderwerp van het weetje.
+         - 3 opties.
+         - 1 correct antwoord.
+         - Een korte uitleg.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            fact: { type: Type.STRING },
+            quiz: {
+              type: Type.OBJECT,
+              properties: {
+                question: { type: Type.STRING },
+                options: { 
+                  type: Type.ARRAY, 
+                  items: { type: Type.STRING },
+                  description: "Array van precies 3 opties"
+                },
+                correctAnswer: { type: Type.STRING },
+                explanation: { type: Type.STRING }
+              },
+              required: ["question", "options", "correctAnswer", "explanation"]
+            }
+          },
+          required: ["fact", "quiz"]
+        }
+      }
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text);
+    }
+    return null;
+  } catch (error) {
+    console.error("Gemini Content Error:", error);
+    return null;
+  }
+};
+
+const fetchTriviaImage = async (textContext) => {
+  if (!ai) return null;
+  
+  try {
+    // Shorten context if too long
+    const cleanContext = textContext.replace(/^-.*?Wist je dat/i, '').substring(0, 300);
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          { text: `Een sfeervolle, artistieke illustratie (digitaal schilderij) die past bij dit weetje: "${cleanContext}". Geen tekst in de afbeelding.` }
+        ]
+      },
+      config: {
+        imageConfig: {
+            aspectRatio: "16:9",
+        }
+      }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error("Gemini API Error (Image):", error);
+    return null;
+  }
+};
+
+const fetchTriviaAudio = async (text) => {
+    if (!ai) return null;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: 'Fenrir' }, 
+              },
+          },
+        },
+      });
+  
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      return base64Audio || null;
+    } catch (error) {
+      console.error("Gemini API Error (Audio):", error);
+      return null;
+    }
+};
+
+// --- 3. COMPONENTS ---
 
 // Helper to decode PCM
 const decode = (base64) => {
@@ -625,3 +776,4 @@ root.render(
     <App />
   </React.StrictMode>
 );
+    
