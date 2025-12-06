@@ -1,10 +1,9 @@
 
 import React, { useState } from 'react';
-import RadioPlayer from './components/RadioPlayer';
 import FactModal from './components/FactModal';
 import { Category, GameState, ScoreBoard, QuizData } from './types';
 import { fetchTopicContent, fetchTriviaImage, fetchTriviaAudio } from './services/geminiService';
-import { Shuffle, Trophy, ArrowRight, Star, Maximize2, Minimize2, BookOpen, BrainCircuit, ArrowLeft } from 'lucide-react';
+import { Shuffle, Trophy, Maximize2, BookOpen, BrainCircuit, ArrowLeft } from 'lucide-react';
 
 const CATEGORIES = Object.values(Category);
 
@@ -111,7 +110,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen wood-bg flex flex-col relative pb-32 transition-all">
+    <div className="min-h-screen wood-bg flex flex-col relative pb-8 transition-all">
       
       {/* AMBIENT MODE OVERLAY */}
       {isAmbientMode && currentImage && (
@@ -283,8 +282,6 @@ const App: React.FC = () => {
         onAnswerQuiz={handleQuizAnswer}
         initialView={initialModalView}
       />
-
-      <RadioPlayer />
     </div>
   );
 };

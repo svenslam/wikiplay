@@ -1,3 +1,4 @@
+
 export enum Category {
   HISTORY = 'Geschiedenis',
   SCIENCE = 'Wetenschap',
@@ -7,6 +8,12 @@ export enum Category {
   TECH = 'Technologie',
   GEOGRAPHY = 'Geografie',
   ENTERTAINMENT = 'Entertainment',
+}
+
+export interface RadioStation {
+  name: string;
+  genre: string;
+  url: string;
 }
 
 export interface QuizData {
@@ -19,12 +26,6 @@ export interface QuizData {
 export interface TopicContent {
   fact: string;
   quiz: QuizData;
-}
-
-export interface RadioStation {
-  name: string;
-  url: string;
-  genre: string;
 }
 
 export enum GameState {
