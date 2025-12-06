@@ -242,20 +242,21 @@ const App: React.FC = () => {
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {CATEGORIES.map(cat => {
-                     const total = scores[cat].correct + scores[cat].wrong;
+                     const score = scores[cat] as { correct: number, wrong: number };
+                     const total = score.correct + score.wrong;
                      if (total === 0) return null;
                      
                      return (
                          <div key={cat} className="flex flex-col p-2 bg-white/5 rounded-lg">
                              <span className="text-xs text-gray-400 uppercase truncate font-bold mb-1">{cat}</span>
                              <div className="flex justify-between items-center text-xs mb-1">
-                                <span className="text-green-400">{scores[cat].correct} V</span>
-                                <span className="text-red-400">{scores[cat].wrong} X</span>
+                                <span className="text-green-400">{score.correct} V</span>
+                                <span className="text-red-400">{score.wrong} X</span>
                              </div>
                              {/* Mini bar */}
                              <div className="h-1.5 w-full bg-gray-700 mt-1 rounded-full overflow-hidden flex">
-                                 <div style={{width: `${(scores[cat].correct / total) * 100}%`}} className="bg-green-500 h-full" />
-                                 <div style={{width: `${(scores[cat].wrong / total) * 100}%`}} className="bg-red-500 h-full" />
+                                 <div style={{width: `${(score.correct / total) * 100}%`}} className="bg-green-500 h-full" />
+                                 <div style={{width: `${(score.wrong / total) * 100}%`}} className="bg-red-500 h-full" />
                              </div>
                          </div>
                      )
