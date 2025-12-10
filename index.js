@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-import { Shuffle, Trophy, Maximize2, BookOpen, BrainCircuit, ArrowLeft, X, RefreshCw, Share2, Volume2, StopCircle, Image as ImageIcon, CheckCircle, XCircle, ArrowDown } from 'lucide-react';
+import { Shuffle, Trophy, Maximize2, BookOpen, BrainCircuit, ArrowLeft, X, RefreshCw, Share2, Volume2, StopCircle, Image as ImageIcon, CheckCircle, XCircle, ArrowDown, Globe } from 'lucide-react';
 
-// --- 1. DEFINITIONS (Formerly types.js) ---
+// --- 1. DEFINITIONS ---
 
 const Category = {
   HISTORY: 'Geschiedenis',
@@ -25,20 +25,98 @@ const GameState = {
   SHOWING_CONTENT: 'SHOWING_CONTENT',
 };
 
-// --- 2. SERVICE LOGIC (Formerly geminiService.js) ---
+// --- 2. SERVICE LOGIC ---
 
-// Safely retrieve API key or default to empty string to prevent ReferenceError
+// Safely retrieve API key
 const apiKey = (typeof process !== "undefined" && process.env && process.env.API_KEY) ? process.env.API_KEY : "";
-
-// Only initialize if we have a key
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-const fetchTopicContent = async (category) => {
-  if (!ai) {
-    console.warn("API Key missing or invalid. Cannot fetch content.");
-    return null;
-  }
+// Search terms to ensure variety in Wikipedia mode
+const WIKI_SEARCH_TERMS = {
+    [Category.HISTORY]: ["Oudheid", "Middeleeuwen", "V.O.C.", "Wereldoorlog", "Kastelen", "Romeinse Rijk", "Gouden Eeuw"],
+    [Category.SCIENCE]: ["Astronomie", "Biologie", "Natuurkunde", "Scheikunde", "Ruimtevaart", "Zonnestelsel", "Anatomie"],
+    [Category.NATURE]: ["Zoogdieren", "Vogels", "Planten", "Oerwoud", "Oceanen", "Woestijn", "Reptielen"],
+    [Category.SPORTS]: ["Voetbal", "Olympische Spelen", "Tennis", "Formule 1", "Schaatsen", "Wielrennen", "Atletiek"],
+    [Category.ART]: ["Schilderkunst", "Vincent van Gogh", "Rembrandt", "Moderne kunst", "Beeldhouwkunst", "Architectuur", "Muziekgeschiedenis"],
+    [Category.TECH]: ["Computers", "Internet", "Kunstmatige intelligentie", "Robotica", "Uitvindingen", "Duurzame energie", "Smartphone"],
+    [Category.GEOGRAPHY]: ["Europa", "Azië", "Gebergte", "Rivieren", "Vulkanen", "Oceanen", "Klimaat"],
+    [Category.ENTERTAINMENT]: ["Films", "Popmuziek", "Televisieseries", "Hollywood", "Videospellen", "Musical", "Festival"]
+};
 
+// --- Wikipedia Service (No AI) ---
+const fetchWikipediaContent = async (category) => {
+    try {
+        // 1. Pick a random search term for this category
+        const terms = WIKI_SEARCH_TERMS[category] || [category];
+        const searchTerm = terms[Math.floor(Math.random() * terms.length)];
+
+        // 2. Search for pages
+        const searchUrl = `https://nl.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchTerm)}&format=json&origin=*&srlimit=20`;
+        const searchRes = await fetch(searchUrl).then(res => res.json());
+        
+        if (!searchRes.query || !searchRes.query.search || searchRes.query.search.length === 0) {
+            throw new Error("Geen resultaten");
+        }
+
+        // 3. Pick 3 distinct random articles (1 correct, 2 wrong for quiz)
+        const results = searchRes.query.search.filter(r => !r.title.includes("Lijst van")); // Filter out list pages
+        if (results.length < 3) throw new Error("Te weinig geschikte artikelen");
+
+        const shuffled = results.sort(() => 0.5 - Math.random());
+        const correctArticle = shuffled[0];
+        const wrong1 = shuffled[1];
+        const wrong2 = shuffled[2];
+
+        // 4. Fetch details for the correct article (Extract & Image)
+        const detailUrl = `https://nl.wikipedia.org/w/api.php?action=query&prop=extracts|pageimages&titles=${encodeURIComponent(correctArticle.title)}&exintro&explaintext&pithumbsize=600&format=json&origin=*`;
+        const detailRes = await fetch(detailUrl).then(res => res.json());
+        
+        const pages = detailRes.query.pages;
+        const pageId = Object.keys(pages)[0];
+        const pageData = pages[pageId];
+
+        // 5. Construct Content
+        const cleanFact = pageData.extract || "Geen tekst beschikbaar.";
+        const imageUrl = pageData.thumbnail ? pageData.thumbnail.source : null;
+
+        // Mask the title in the text for the quiz
+        const titleRegex = new RegExp(correctArticle.title, 'gi');
+        const maskedFact = cleanFact.replace(titleRegex, "_______");
+
+        // Quiz options
+        const options = [correctArticle.title, wrong1.title, wrong2.title].sort(() => 0.5 - Math.random());
+
+        return {
+            fact: `- ${category} (Wikipedia) -\n\n${cleanFact}`,
+            maskedFact: maskedFact, // Used for quiz context if needed
+            image: imageUrl,
+            source: 'wikipedia',
+            quiz: {
+                question: "Over welk onderwerp gaat de bovenstaande tekst?",
+                options: options,
+                correctAnswer: correctArticle.title,
+                explanation: `Dit artikel gaat inderdaad over ${correctArticle.title}.`
+            }
+        };
+
+    } catch (error) {
+        console.error("Wikipedia fetch failed:", error);
+        return null;
+    }
+};
+
+// --- Main Fetch Router ---
+const fetchTopicContent = async (category) => {
+  // If we have AI, use it. If not, use Wikipedia.
+  if (ai) {
+      return await fetchAIContent(category);
+  } else {
+      console.log("No API Key detected, using Wikipedia mode.");
+      return await fetchWikipediaContent(category);
+  }
+};
+
+const fetchAIContent = async (category) => {
   try {
     const prompt = `
       Je bent de host van een kennis-app genaamd Wikiplay.
@@ -88,7 +166,8 @@ const fetchTopicContent = async (category) => {
     });
 
     if (response.text) {
-      return JSON.parse(response.text);
+      const data = JSON.parse(response.text);
+      return { ...data, source: 'ai' };
     }
     return null;
   } catch (error) {
@@ -101,9 +180,7 @@ const fetchTriviaImage = async (textContext) => {
   if (!ai) return null;
   
   try {
-    // Shorten context if too long
     const cleanContext = textContext.replace(/^-.*?Wist je dat/i, '').substring(0, 300);
-
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
@@ -112,9 +189,7 @@ const fetchTriviaImage = async (textContext) => {
         ]
       },
       config: {
-        imageConfig: {
-            aspectRatio: "16:9",
-        }
+        imageConfig: { aspectRatio: "16:9" }
       }
     });
 
@@ -157,7 +232,7 @@ const fetchTriviaAudio = async (text) => {
 
 // --- 3. COMPONENTS ---
 
-// Helper to decode PCM
+// Helper to decode PCM (for AI Audio)
 const decode = (base64) => {
     const binaryString = atob(base64);
     const len = binaryString.length;
@@ -168,12 +243,7 @@ const decode = (base64) => {
     return bytes;
 };
   
-const decodeAudioData = async (
-    data,
-    ctx,
-    sampleRate = 24000,
-    numChannels = 1,
-) => {
+const decodeAudioData = async (data, ctx, sampleRate = 24000, numChannels = 1) => {
     const dataInt16 = new Int16Array(data.buffer);
     const frameCount = dataInt16.length / numChannels;
     const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
@@ -192,7 +262,8 @@ const FactModal = ({
     fact, 
     quizData,
     imageUrl, 
-    audioBase64, 
+    audioBase64,
+    sourceType, // 'ai' or 'wikipedia'
     isOpen, 
     onClose, 
     isLoading,
@@ -202,7 +273,7 @@ const FactModal = ({
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedOption, setSelectedOption] = useState(null);
-  const [quizResult, setQuizResult] = useState(null); // 'correct' | 'wrong' | null
+  const [quizResult, setQuizResult] = useState(null);
   
   const audioContextRef = useRef(null);
   const sourceNodeRef = useRef(null);
@@ -223,47 +294,54 @@ const FactModal = ({
   // Handle scroll to quiz if requested
   useEffect(() => {
     if (isOpen && !isLoading && quizData && initialView === 'quiz' && quizSectionRef.current) {
-        // Small delay to ensure layout is ready
         setTimeout(() => {
             quizSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
     }
   }, [isOpen, isLoading, quizData, initialView]);
 
-  // Cleanup
   useEffect(() => {
     return () => stopAudio();
   }, []);
 
   const playAudio = async () => {
-    if (!audioBase64) return;
-    
-    try {
-        stopAudio();
-        setIsPlaying(true);
+    stopAudio();
+    setIsPlaying(true);
 
-        if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({sampleRate: 24000});
+    if (sourceType === 'ai' && audioBase64) {
+        // AI Audio Logic
+        try {
+            if (!audioContextRef.current) {
+                audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({sampleRate: 24000});
+            }
+            if (audioContextRef.current.state === 'suspended') {
+                await audioContextRef.current.resume();
+            }
+            const audioData = decode(audioBase64);
+            const buffer = await decodeAudioData(audioData, audioContextRef.current);
+            const source = audioContextRef.current.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContextRef.current.destination);
+            source.onended = () => setIsPlaying(false);
+            source.start();
+            sourceNodeRef.current = source;
+        } catch (e) {
+            console.error("Audio playback error", e);
+            setIsPlaying(false);
         }
-        
-        if (audioContextRef.current.state === 'suspended') {
-            await audioContextRef.current.resume();
+    } else {
+        // Browser TTS Logic (Wikipedia Mode)
+        try {
+            const textToSpeak = fact.replace(/^-.*?-\s+/, ''); // Remove header
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            utterance.lang = 'nl-NL'; // Dutch
+            utterance.onend = () => setIsPlaying(false);
+            utterance.onerror = () => setIsPlaying(false);
+            window.speechSynthesis.speak(utterance);
+        } catch (e) {
+            console.error("TTS error", e);
+            setIsPlaying(false);
         }
-
-        const audioData = decode(audioBase64);
-        const buffer = await decodeAudioData(audioData, audioContextRef.current);
-
-        const source = audioContextRef.current.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioContextRef.current.destination);
-        
-        source.onended = () => setIsPlaying(false);
-        
-        source.start();
-        sourceNodeRef.current = source;
-    } catch (e) {
-        console.error("Audio playback error", e);
-        setIsPlaying(false);
     }
   };
 
@@ -272,12 +350,15 @@ const FactModal = ({
         try { sourceNodeRef.current.stop(); } catch (e) {}
         sourceNodeRef.current = null;
     }
+    // Cancel browser TTS
+    if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
     setIsPlaying(false);
   };
 
   const handleOptionClick = (option) => {
-    if (quizResult !== null) return; // Prevent multi-click
-
+    if (quizResult !== null) return;
     setSelectedOption(option);
     const isCorrect = option === quizData?.correctAnswer;
     setQuizResult(isCorrect ? 'correct' : 'wrong');
@@ -288,7 +369,6 @@ const FactModal = ({
 
   const formatFactText = (text) => {
     if (!text) return "";
-    // Remove the "- Category -" part for the body text
     const parts = text.split('\n\n');
     return (
         <React.Fragment>
@@ -316,6 +396,9 @@ const FactModal = ({
             <h2 className="text-xl font-bold font-[Lobster] tracking-wide truncate ml-2">
                 {isLoading ? 'Laden...' : category}
             </h2>
+            {sourceType === 'wikipedia' && !isLoading && (
+                <span className="bg-white/20 px-2 py-0.5 rounded text-xs font-mono border border-white/30">WIKI</span>
+            )}
           </div>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full transition">
             <X size={24} />
@@ -324,12 +407,12 @@ const FactModal = ({
 
         <div ref={scrollRef} className="overflow-y-auto overflow-x-hidden flex-1 p-0 scroll-smooth">
             {/* Image Area */}
-            <div className="w-full h-48 sm:h-56 bg-gray-200 relative shrink-0">
+            <div className="w-full h-48 sm:h-56 bg-gray-200 relative shrink-0 group">
                 {isLoading ? (
                     <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 gap-3">
                         <RefreshCw className="animate-spin text-amber-500" size={32} />
                         <span className="text-gray-500 text-sm font-medium">
-                            Kennis ophalen...
+                            {sourceType === 'wikipedia' ? 'Wikipedia doorzoeken...' : 'Kennis ophalen...'}
                         </span>
                     </div>
                 ) : imageUrl ? (
@@ -346,13 +429,16 @@ const FactModal = ({
                                 <span className="text-xs mt-1">Schilderij maken...</span>
                              </div>
                         ) : (
-                            <ImageIcon size={40} />
+                            <div className="flex flex-col items-center">
+                                <ImageIcon size={40} />
+                                <span className="text-xs mt-2">Geen afbeelding</span>
+                            </div>
                         )}
                     </div>
                 )}
                 
                 {/* Audio Button Overlay */}
-                {!isLoading && audioBase64 && (
+                {!isLoading && (
                     <button 
                         onClick={isPlaying ? stopAudio : playAudio}
                         className={`absolute bottom-4 right-4 flex items-center gap-2 px-4 py-2 rounded-full font-bold shadow-lg transition-all transform hover:scale-105 ${
@@ -397,8 +483,10 @@ const FactModal = ({
                 {!isLoading && quizData && (
                     <div className="bg-indigo-50 p-5 rounded-xl border border-indigo-100 animate-fade-in-up delay-100">
                         <div className="flex items-center gap-2 mb-4 text-indigo-700">
-                            <BrainCircuit size={20} />
-                            <span className="font-bold text-sm uppercase">Test je kennis</span>
+                            {sourceType === 'wikipedia' ? <Globe size={20}/> : <BrainCircuit size={20} />}
+                            <span className="font-bold text-sm uppercase">
+                                {sourceType === 'wikipedia' ? 'Raad het artikel' : 'Test je kennis'}
+                            </span>
                         </div>
                         
                         <h3 className="text-lg font-bold text-gray-900 mb-4 leading-tight">
@@ -489,10 +577,8 @@ const App = () => {
   const [currentCategory, setCurrentCategory] = useState(null);
   
   // Content Data
-  const [currentFact, setCurrentFact] = useState(null);
-  const [currentQuiz, setCurrentQuiz] = useState(null);
-  const [currentImage, setCurrentImage] = useState(null);
-  const [currentAudio, setCurrentAudio] = useState(null);
+  const [contentData, setContentData] = useState(null); // { fact, quiz, image, source }
+  const [audioSource, setAudioSource] = useState(null); // base64 string
   
   const [modalOpen, setModalOpen] = useState(false);
   const [initialModalView, setInitialModalView] = useState('fact');
@@ -510,10 +596,8 @@ const App = () => {
 
   const handleCategorySelect = async (category, view = 'fact') => {
     // Reset States
-    setCurrentFact(null);
-    setCurrentQuiz(null);
-    setCurrentImage(null);
-    setCurrentAudio(null);
+    setContentData(null);
+    setAudioSource(null);
     setIsAssetsLoading(false);
     
     // Exit ambient mode if entering a new topic
@@ -524,27 +608,37 @@ const App = () => {
     setGameState(GameState.FETCHING);
     setModalOpen(true);
     
-    // Fetch combined content
+    // Fetch combined content (Router decides between AI or Wiki)
     const content = await fetchTopicContent(category);
     
     if (content) {
-        setCurrentFact(content.fact);
-        setCurrentQuiz(content.quiz);
+        setContentData(content);
         setGameState(GameState.SHOWING_CONTENT);
         
-        // Start background loading of assets
-        setIsAssetsLoading(true);
-        Promise.all([
-            fetchTriviaImage(content.fact),
-            fetchTriviaAudio(content.fact)
-        ]).then(([img, audio]) => {
-            setCurrentImage(img);
-            setCurrentAudio(audio);
+        // Handle Assets based on source
+        if (content.source === 'ai') {
+            setIsAssetsLoading(true);
+            Promise.all([
+                fetchTriviaImage(content.fact),
+                fetchTriviaAudio(content.fact)
+            ]).then(([img, audio]) => {
+                // Only update if we are still looking at the same content
+                setContentData(prev => ({ ...prev, image: img }));
+                setAudioSource(audio);
+                setIsAssetsLoading(false);
+            });
+        } else {
+            // Wikipedia mode (image is already in content.image, audio is handled by browser TTS)
+            // No extra loading needed
             setIsAssetsLoading(false);
-        });
+        }
+
     } else {
-        // Fallback
-        setCurrentFact(`Excuses, we konden geen informatie vinden over ${category}. Probeer het nog eens.`);
+        // Fallback error
+        setContentData({
+            fact: `Excuses, we konden geen informatie vinden over ${category}. Probeer het nog eens.`,
+            source: 'error'
+        });
         setGameState(GameState.SHOWING_CONTENT);
     }
   };
@@ -569,6 +663,8 @@ const App = () => {
   const handleCloseModal = () => {
     setModalOpen(false);
     setGameState(GameState.IDLE);
+    // Stop audio/TTS
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
   };
 
   // Helper for grid colors
@@ -590,10 +686,10 @@ const App = () => {
     <div className="min-h-screen wood-bg flex flex-col relative pb-8 transition-all">
       
       {/* AMBIENT MODE OVERLAY */}
-      {isAmbientMode && currentImage && (
+      {isAmbientMode && contentData?.image && (
         <div className="fixed inset-0 z-40 bg-black animate-fade-in">
             <img 
-                src={currentImage} 
+                src={contentData.image} 
                 alt="Fullscreen Atmosphere" 
                 className="w-full h-full object-cover opacity-80"
             />
@@ -609,9 +705,9 @@ const App = () => {
                     Terug naar Home
                 </button>
 
-                {currentFact && (
+                {contentData?.fact && (
                      <div className="hidden md:block max-w-lg bg-black/40 backdrop-blur-md p-4 rounded-xl border border-white/10 text-white/90 text-sm">
-                        <p className="line-clamp-3 italic">"{currentFact.split('\n\n')[1] || currentFact}"</p>
+                        <p className="line-clamp-3 italic">"{contentData.fact.split('\n\n')[1] || contentData.fact}"</p>
                      </div>
                 )}
             </div>
@@ -632,11 +728,14 @@ const App = () => {
                     <div className="w-10 h-10 bg-amber-600 rounded-lg flex items-center justify-center border-2 border-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.5)]">
                         <span className="text-xl">🎯</span>
                     </div>
-                    <h1 className="text-2xl md:text-3xl font-[Lobster] text-amber-400 drop-shadow-sm tracking-wide">Wikiplay</h1>
+                    <div className="flex flex-col">
+                        <h1 className="text-2xl md:text-3xl font-[Lobster] text-amber-400 drop-shadow-sm tracking-wide leading-none">Wikiplay</h1>
+                        {!ai && <span className="text-[10px] text-gray-400 font-mono tracking-widest uppercase">Wikipedia Mode</span>}
+                    </div>
                 </div>
                 
                 <div className="flex gap-2">
-                    {currentImage && (
+                    {contentData?.image && (
                         <button
                             onClick={() => setIsAmbientMode(true)}
                             className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-full border border-gray-600 transition"
@@ -750,10 +849,11 @@ const App = () => {
         isOpen={modalOpen}
         onClose={handleCloseModal}
         category={currentCategory}
-        fact={currentFact}
-        quizData={currentQuiz}
-        imageUrl={currentImage}
-        audioBase64={currentAudio}
+        fact={contentData?.fact}
+        quizData={contentData?.quiz}
+        imageUrl={contentData?.image}
+        audioBase64={audioSource}
+        sourceType={contentData?.source}
         isLoading={gameState === GameState.FETCHING}
         isAssetsLoading={isAssetsLoading}
         onAnswerQuiz={handleQuizAnswer}
@@ -776,4 +876,3 @@ root.render(
     <App />
   </React.StrictMode>
 );
-    

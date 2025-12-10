@@ -242,7 +242,7 @@ const App: React.FC = () => {
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {CATEGORIES.map(cat => {
-                     const score = scores[cat] as { correct: number, wrong: number };
+                     const score = scores[cat] as { correct: number; wrong: number };
                      const total = score.correct + score.wrong;
                      if (total === 0) return null;
                      
