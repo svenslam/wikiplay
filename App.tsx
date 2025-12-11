@@ -204,11 +204,11 @@ const App: React.FC = () => {
                             <h3 className="font-bold text-xl tracking-wide shadow-black drop-shadow-md text-white">{cat}</h3>
                             
                             {/* Score badge */}
-                            {(scores[cat].correct > 0 || scores[cat].wrong > 0) && (
+                            {((scores as any)[cat].correct > 0 || (scores as any)[cat].wrong > 0) && (
                                 <div className="flex gap-1 text-[10px] font-mono bg-black/40 px-2 py-1 rounded-md backdrop-blur-sm border border-white/10">
-                                    <span className="text-green-400 font-bold">{scores[cat].correct}</span>
+                                    <span className="text-green-400 font-bold">{(scores as any)[cat].correct}</span>
                                     <span className="text-gray-400">/</span>
-                                    <span className="text-red-400 font-bold">{scores[cat].wrong}</span>
+                                    <span className="text-red-400 font-bold">{(scores as any)[cat].wrong}</span>
                                 </div>
                             )}
                         </div>
@@ -242,7 +242,7 @@ const App: React.FC = () => {
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {CATEGORIES.map(cat => {
-                     const score = scores[cat] as { correct: number; wrong: number };
+                     const score = (scores as any)[cat];
                      const total = score.correct + score.wrong;
                      if (total === 0) return null;
                      
@@ -261,7 +261,7 @@ const App: React.FC = () => {
                          </div>
                      )
                 })}
-                {Object.values(scores).every(s => s.correct === 0 && s.wrong === 0) && (
+                {Object.values(scores).every((s: any) => s.correct === 0 && s.wrong === 0) && (
                     <p className="text-gray-500 text-sm col-span-full italic text-center py-2">Nog geen scores. Kies een onderwerp om te beginnen!</p>
                 )}
             </div>

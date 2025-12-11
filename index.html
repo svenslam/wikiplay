@@ -1,73 +1,338 @@
 <!DOCTYPE html>
 <html lang="nl">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wikiplay</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Add Babel Standalone to compile JSX in the browser -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script>
-      // ------------------------------------------------------------------
-      // CONFIGURATIE: PLAK HIER JE API KEY
-      // Haal je key gratis op: https://aistudio.google.com/app/apikey
-      // ------------------------------------------------------------------
-      const MY_API_KEY = ''; // <-- Plak hier je key tussen de haakjes, bijv: 'AIzaSy...'
-      
-      // Polyfill process.env for browser environments (e.g. GitHub Pages)
-      window.process = window.process || { env: { API_KEY: MY_API_KEY } };
-    </script>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&family=Lobster&display=swap');
-      
-      body {
-        font-family: 'Poppins', sans-serif;
-        background-color: #1a1a1a;
-        color: white;
-        overflow-x: hidden;
-      }
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WikiGraaf: Interactieve Kennisverkenner</title>
+    
+    <!-- Vis.js for Network Graph -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
-      .wood-bg {
-        background-color: #2e1a12;
-        background-image: url("https://www.transparenttextures.com/patterns/wood-pattern.png");
-        /* Fallback if texture fails */
-      }
-      
-      /* Animation utilities */
-      .animate-fade-in {
-        animation: fadeIn 0.5s ease-out forwards;
-      }
-      .animate-fade-in-up {
-        animation: fadeInUp 0.5s ease-out forwards;
-      }
-      
-      @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-      }
-      @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
+    <style>
+        :root {
+            --bg-color: #0f1115;
+            --panel-bg: rgba(22, 25, 31, 0.95);
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.5);
+            --border: #1e293b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow: hidden; /* Prevent scrolling on the map */
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Graph Container */
+        #network {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #1a1d26 0%, #0f1115 100%);
+            cursor: crosshair;
+        }
+
+        /* UI Overlay - Search & History */
+        .ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 350px;
+            width: 100%;
+        }
+
+        .search-box {
+            display: flex;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 4px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        .search-box input {
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 10px 12px;
+            flex: 1;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+        }
+
+        .search-box button {
+            background: var(--accent);
+            border: none;
+            color: white;
+            padding: 0 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .search-box button:hover { background: #2563eb; }
+
+        .history-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-icon {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            color: white;
+            border-color: var(--text-muted);
+        }
+
+        .btn-icon:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Side Panel (Article Viewer) */
+        .side-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            bottom: 20px;
+            width: 450px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            z-index: 20;
+            transform: translateX(120%); /* Hidden by default */
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+            backdrop-filter: blur(12px);
+            overflow: hidden;
+        }
+
+        .side-panel.open {
+            transform: translateX(0);
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .panel-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--accent);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 250px;
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .panel-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            color: #cbd5e1;
+        }
+
+        /* Wikipedia Content Styling */
+        .panel-content h2, .panel-content h3 {
+            color: white;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            font-size: 1.1em;
+        }
+        .panel-content p { margin-bottom: 1em; }
+        .panel-content a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
+        .panel-content ul { padding-left: 20px; margin-bottom: 1em; }
+        .panel-content img { display: none; } /* Hide wiki images for clean text view */
+        .panel-content table { display: none; } /* Hide complex tables */
+        .mw-editsection { display: none; } /* Hide edit links */
+
+        .panel-footer {
+            padding: 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .btn-primary {
+            flex: 1;
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        
+        .btn-primary:hover { background: #2563eb; }
+
+        /* Loader */
+        .loader-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--panel-bg);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        
+        .loader-container.active { opacity: 1; }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--text-muted);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Mobile Responsive */
+        @media (max-width: 600px) {
+            .side-panel {
+                width: 100%;
+                top: auto;
+                bottom: 0;
+                height: 60vh;
+                transform: translateY(120%);
+                border-radius: 20px 20px 0 0;
+            }
+            .side-panel.open { transform: translateY(0); }
+            .ui-overlay { width: calc(100% - 40px); }
+        }
     </style>
-  <script type="importmap">
+<script type="importmap">
 {
   "imports": {
-    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.1/client",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.1",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "d3": "https://aistudiocdn.com/d3@^7.9.0"
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "react": "https://esm.sh/react@^19.2.1",
+    "d3": "https://esm.sh/d3@^7.9.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.560.0"
   }
 }
 </script>
 </head>
-  <body>
-    <div id="root"></div>
-    <!-- Load the JS entry point with Babel text/babel type -->
-    <script type="text/babel" data-type="module" src="./index.js"></script>
-  </body>
+<body>
+
+    <!-- Graph Canvas -->
+    <div id="network"></div>
+
+    <!-- Top Left Controls -->
+    <div class="ui-overlay">
+        <form id="search-form" class="search-box">
+            <input type="text" id="search-input" placeholder="Onderwerp (bv. Amsterdam)..." autocomplete="off">
+            <button type="submit"><i data-lucide="search" width="18"></i></button>
+        </form>
+
+        <div class="history-controls">
+            <button id="btn-back" class="btn-icon" disabled>
+                <i data-lucide="arrow-left" width="16"></i> Terug
+            </button>
+            <div id="current-topic-label" style="color:var(--text-muted); font-size: 0.8rem; display: flex; align-items: center;">
+                Start je reis...
+            </div>
+        </div>
+    </div>
+
+    <!-- Side Panel (Content) -->
+    <div id="side-panel" class="side-panel">
+        <div class="panel-header">
+            <div class="panel-title" id="panel-title">Titel</div>
+            <div class="panel-actions">
+                <button class="btn-icon" id="btn-close-panel" style="padding: 4px;">
+                    <i data-lucide="x" width="20"></i>
+                </button>
+            </div>
+        </div>
+        <div id="panel-content" class="panel-content">
+            <!-- Wikipedia content loads here -->
+        </div>
+        <div class="panel-footer">
+            <button id="btn-focus" class="btn-primary">
+                <i data-lucide="crosshair" width="18"></i>
+                Maak Focuspunt
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loader" class="loader-container">
+        <div class="spinner"></div>
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Wiki data ophalen...</span>
+    </div>
+
+    <!-- App Logic -->
+    <script src="index.js"></script>
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+    </script>
+</body>
 </html>
