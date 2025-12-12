@@ -182,10 +182,10 @@ const Graph = {
         if (!topic) return;
 
         UI.setLoading(true);
-        UI.closePanel();
+        UI.closePanel(); // Briefly close panel to indicate change
 
         // 1. History Management
-        if (addToHistory && state.currentTopic) {
+        if (addToHistory && state.currentTopic && state.currentTopic !== topic) {
             state.history.push(state.currentTopic);
         }
         state.currentTopic = topic;
@@ -228,8 +228,13 @@ const Graph = {
             });
         });
 
-        // 4. Stabilize
+        // 4. Stabilize and auto-open content
         state.network.fit();
+        
+        // OPTIONAL: Automatically open the content for the main topic when loaded
+        // const content = await WikiAPI.getContent(topic);
+        // if(content) UI.openPanel(topic, content);
+
         UI.setLoading(false);
     },
 
@@ -238,7 +243,7 @@ const Graph = {
             const nodeId = params.nodes[0];
             UI.setLoading(true);
             
-            // Don't re-render graph, just show content
+            // Show content without changing graph center immediately
             const content = await WikiAPI.getContent(nodeId);
             if (content) {
                 UI.openPanel(nodeId, content);
@@ -266,7 +271,6 @@ UI.elements.form.addEventListener('submit', (e) => {
     if (val) {
         Graph.loadTopic(val, true);
         UI.elements.input.value = '';
-        // Unfocus keyboard on mobile
         UI.elements.input.blur(); 
     }
 });
@@ -285,6 +289,31 @@ UI.elements.closePanelBtn.addEventListener('click', () => UI.closePanel());
 UI.elements.focusBtn.addEventListener('click', () => {
     if (state.selectedNode) {
         Graph.loadTopic(state.selectedNode, true);
+    }
+});
+
+// Intercept Links inside the Side Panel content
+UI.elements.panelContent.addEventListener('click', (e) => {
+    // Find closest anchor tag
+    const link = e.target.closest('a');
+    
+    if (link) {
+        const href = link.getAttribute('href');
+        
+        // Handle internal Wikipedia links
+        if (href && href.startsWith('/wiki/')) {
+            e.preventDefault();
+            // Decode title (e.g., "Koning_Willem-Alexander" -> "Koning Willem-Alexander")
+            const title = decodeURIComponent(href.replace('/wiki/', ''));
+            
+            // Navigate the graph to this new topic
+            Graph.loadTopic(title, true);
+        }
+        // Handle external links (open in new tab)
+        else if (href && !href.startsWith('#')) {
+            e.preventDefault();
+            window.open(href, '_blank');
+        }
     }
 });
 
